@@ -4311,12 +4311,14 @@
       }
     }
 
+    const DEFAULT_ECOWIF_WEB_URL = 'https://salam2076.github.io/ECOWIF-APP/';
+
     function getExternalLaunchUrl() {
       const loc = window.location ? String(window.location.href || '') : '';
       if (/^https?:\/\//i.test(loc)) {
         return loc;
       }
-      return FIREBASE_DATABASE_URL || 'https://ecowif-app-default-rtdb.firebaseio.com';
+      return DEFAULT_ECOWIF_WEB_URL;
     }
 
     function launchExternalBrowserForExport() {
@@ -4475,44 +4477,113 @@
       showToast('Please select and copy manually.');
     }
 
-    function buildOfficersExcelHtml() {
-      const rowsHtml = state.members.map(m => {
-        const cleanPosting = escapeHtmlText(stripPostingPrefix(m.posting || ''));
-        const cleanRemarks = escapeHtmlText(m.remarks || ((m.finalAmount || 0) >= 200000 ? 'Paid' : 'Due'));
-        return `
-          <tr>
-            <td>${escapeHtmlText(m.sn)}</td>
-            <td>${escapeHtmlText(m.name || '')}</td>
-            <td>${escapeHtmlText(m.personalId || '')}</td>
-            <td>${escapeHtmlText(m.mobile || '')}</td>
-            <td>${escapeHtmlText(m.email || '')}</td>
-            <td>${cleanPosting}</td>
-            <td>${escapeHtmlText(m.depositDate || '')}</td>
-            <td>${Number(m.finalAmount || 0)}</td>
-            <td>${cleanRemarks}</td>
-          </tr>
-        `;
-      }).join('');
+    function getReportSummaryRows() {
+      const members = Array.isArray(state.members) ? state.members : [];
+      const totalDeposit = members.reduce((sum, m) => sum + Number(m.depositAmount ?? m.finalAmount ?? 0), 0);
+      const totalFinal = members.reduce((sum, m) => sum + Number(m.finalAmount ?? 0), 0);
+
+      const fin = state.fundFinance || {};
+      const interest = Number(fin.interest ?? 114005);
+      const regFee = Number(fin.regFee ?? 75000);
+      const taxCharge = Number(fin.taxCharges ?? fin.taxCharge ?? 17408);
+
+      const totalWithInterest = totalFinal + interest;
+      const totalFundInBank = totalWithInterest - regFee - taxCharge;
+
+      return [
+        { label: 'Total', deposit: totalDeposit, final: totalFinal },
+        { label: 'Annual Regular Interest Credit on Savings', deposit: '', final: interest },
+        { label: 'Total With Interest', deposit: '', final: totalWithInterest },
+        { label: 'Registration Fees', deposit: '', final: regFee },
+        { label: 'Income Tax+Excise Duty+Cash Deposit Charge & Fees', deposit: '', final: taxCharge },
+        { label: 'Total Fund In Bank', deposit: '', final: totalFundInBank }
+      ];
+    }
+
+    function buildOfficersReportRowsData() {
+      return (Array.isArray(state.members) ? state.members : []).map((m, idx) => {
+        const finalAmt = Number(m.finalAmount ?? 0);
+        const depositAmt = Number(m.depositAmount ?? finalAmt);
+        return {
+          sn: m.sn ?? (idx + 1),
+          name: m.name || '',
+          personalId: m.personalId || '',
+          mobile: m.mobile || '',
+          email: m.email || m.emailId || '',
+          posting: stripPostingPrefix(m.posting || ''),
+          depositDate: m.depositDate || m.depositDateTime || '',
+          depositAmount: depositAmt,
+          finalAmount: finalAmt,
+          remarks: m.remarks || (finalAmt >= 200000 ? 'Paid' : 'Due')
+        };
+      });
+    }
+
+    function buildOfficersReportHtmlDoc(docTitle = 'ECOWIF Officers Report') {
+      const rows = buildOfficersReportRowsData();
+      const summaryRows = getReportSummaryRows();
+
+      const bodyHtml = rows.map(r => `
+        <tr>
+          <td>${escapeHtmlText(r.sn)}</td>
+          <td>${escapeHtmlText(r.name)}</td>
+          <td>${escapeHtmlText(r.personalId)}</td>
+          <td>${escapeHtmlText(r.mobile)}</td>
+          <td>${escapeHtmlText(r.email)}</td>
+          <td>${escapeHtmlText(r.posting)}</td>
+          <td>${escapeHtmlText(r.depositDate)}</td>
+          <td style="text-align:right;">${r.depositAmount}</td>
+          <td style="text-align:right;">${r.finalAmount}</td>
+          <td>${escapeHtmlText(r.remarks)}</td>
+        </tr>
+      `).join('');
+
+      const summaryHtml = summaryRows.map(s => `
+        <tr>
+          <td colspan="7" style="font-weight:bold;">${escapeHtmlText(s.label)}</td>
+          <td style="text-align:right;font-weight:bold;">${s.deposit === '' ? '' : s.deposit}</td>
+          <td style="text-align:right;font-weight:bold;">${s.final}</td>
+          <td></td>
+        </tr>
+      `).join('');
 
       return `
-        <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
-        <head><meta charset="UTF-8"></head>
+        <html xmlns:o="urn:schemas-microsoft-com:office:office"
+              xmlns:w="urn:schemas-microsoft-com:office:word"
+              xmlns:x="urn:schemas-microsoft-com:office:excel"
+              xmlns="http://www.w3.org/TR/REC-html40">
+        <head>
+          <meta charset="UTF-8">
+          <title>${escapeHtmlText(docTitle)}</title>
+          <style>
+            body { font-family: Arial, sans-serif; font-size: 11pt; }
+            h2 { color: #064e3b; margin-bottom: 8px; }
+            table { border-collapse: collapse; width: 100%; }
+            th, td { border: 1px solid #444; padding: 5px 7px; }
+            th { background-color: #064e3b; color: #ffffff; text-align: left; }
+          </style>
+        </head>
         <body>
-          <table border="1">
+          <h2>${escapeHtmlText(docTitle)}</h2>
+          <table>
             <thead>
               <tr>
                 <th>SN</th>
-                <th>Officer Name</th>
-                <th>Personal ID (PID)</th>
-                <th>Mobile Number</th>
-                <th>Email</th>
-                <th>Current Posting</th>
-                <th>Deposit Date</th>
-                <th>Total Deposit</th>
+                <th>Name</th>
+                <th>Personal ID</th>
+                <th>Mobile</th>
+                <th>Email ID</th>
+                <th>Present Posting</th>
+                <th>Deposit Date &amp; Time</th>
+                <th>Deposit Amount</th>
+                <th>Final Amount</th>
                 <th>Remarks</th>
               </tr>
             </thead>
-            <tbody>${rowsHtml}</tbody>
+            <tbody>
+              ${bodyHtml}
+              ${summaryHtml}
+            </tbody>
           </table>
         </body>
         </html>
@@ -4524,9 +4595,89 @@
         showToast('No members available to download!');
         return;
       }
-      const excelHtml = buildOfficersExcelHtml();
-      const blob = new Blob(['\uFEFF', excelHtml], { type: 'application/vnd.ms-excel;charset=utf-8;' });
-      await universalDeliverFile(blob, 'ECOWIF_Officers_Report_2026.xls', 'application/vnd.ms-excel', excelHtml);
+      const htmlContent = buildOfficersReportHtmlDoc('ECOWIF Report');
+      const blob = new Blob(['\uFEFF', htmlContent], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+      await universalDeliverFile(blob, 'ECOWIF_Officers_Report_2026.xls', 'application/vnd.ms-excel', htmlContent);
+    }
+
+    async function downloadReportWord() {
+      if (!state.members || state.members.length === 0) {
+        showToast('No members available to download!');
+        return;
+      }
+      const wordHtml = buildOfficersReportHtmlDoc('ECOWIF - Officers Report');
+      const blob = new Blob(['\uFEFF', wordHtml], { type: 'application/msword;charset=utf-8;' });
+      await universalDeliverFile(blob, 'ECOWIF_Officers_Report_2026.doc', 'application/msword', wordHtml);
+    }
+
+    async function downloadReportPDF() {
+      if (!state.members || state.members.length === 0) {
+        showToast('No members available to download!');
+        return;
+      }
+      const rows = buildOfficersReportRowsData();
+      const summaryRows = getReportSummaryRows();
+      const fileName = 'ECOWIF_Officers_Report_2026.pdf';
+
+      if (window.jspdf && window.jspdf.jsPDF) {
+        try {
+          const { jsPDF } = window.jspdf;
+          const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+
+          doc.setFillColor(6, 78, 59);
+          doc.rect(0, 0, 297, 20, 'F');
+          doc.setTextColor(251, 191, 36);
+          doc.setFontSize(14);
+          doc.setFont('helvetica', 'bold');
+          doc.text('ECOWIF - Officers Fund Report', 148.5, 12.5, { align: 'center' });
+
+          const tableBody = rows.map(r => [
+            String(r.sn),
+            String(r.name),
+            String(r.personalId),
+            String(r.mobile),
+            String(r.email),
+            String(r.posting),
+            String(r.depositDate),
+            Number(r.depositAmount).toLocaleString('en-IN'),
+            Number(r.finalAmount).toLocaleString('en-IN'),
+            String(r.remarks)
+          ]);
+
+          summaryRows.forEach(s => {
+            tableBody.push([
+              '',
+              String(s.label),
+              '',
+              '',
+              '',
+              '',
+              '',
+              s.deposit === '' ? '' : Number(s.deposit).toLocaleString('en-IN'),
+              Number(s.final).toLocaleString('en-IN'),
+              ''
+            ]);
+          });
+
+          if (typeof doc.autoTable === 'function') {
+            doc.autoTable({
+              startY: 25,
+              head: [['SN', 'Name', 'Personal ID', 'Mobile', 'Email ID', 'Present Posting', 'Deposit Date & Time', 'Deposit Amount', 'Final Amount', 'Remarks']],
+              body: tableBody,
+              theme: 'grid',
+              styles: { fontSize: 7.5, cellPadding: 1.5 },
+              headStyles: { fillColor: [6, 78, 59], textColor: [255, 255, 255] }
+            });
+          }
+
+          const pdfBlob = doc.output('blob');
+          await universalDeliverFile(pdfBlob, fileName, 'application/pdf', '');
+          return;
+        } catch (e) {
+          console.error('Report PDF generation failed:', e);
+        }
+      }
+      showToast('PDF generator not available.');
     }
 
     async function downloadReportCSV() {
@@ -4534,20 +4685,19 @@
         showToast('No members available to download!');
         return;
       }
+      const rows = buildOfficersReportRowsData();
+      const summaryRows = getReportSummaryRows();
       let csv = '\uFEFF';
-      csv += 'SN,Officer Name,Personal ID (PID),Mobile Number,Email,Current Posting,Deposit Date,Total Deposit,Remarks\n';
+      csv += 'SN,Name,Personal ID,Mobile,Email ID,Present Posting,Deposit Date & Time,Deposit Amount,Final Amount,Remarks\n';
 
-      state.members.forEach(m => {
-        const cleanName = (m.name || '').replace(/"/g, '""');
-        const cleanPid = (m.personalId || '').replace(/"/g, '""');
-        const cleanMobile = (m.mobile || '').replace(/"/g, '""');
-        const cleanEmail = (m.email || '').replace(/"/g, '""');
-        const cleanPosting = stripPostingPrefix(m.posting || '').replace(/"/g, '""');
-        const cleanDate = (m.depositDate || '').replace(/"/g, '""');
-        const cleanAmount = m.finalAmount || 0;
-        const cleanRemarks = (m.remarks || (cleanAmount >= 200000 ? 'Paid' : 'Due')).replace(/"/g, '""');
+      rows.forEach(r => {
+        const vals = [r.sn, r.name, r.personalId, r.mobile, r.email, r.posting, r.depositDate, r.depositAmount, r.finalAmount, r.remarks];
+        csv += vals.map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',') + '\n';
+      });
 
-        csv += `"${m.sn}","${cleanName}","${cleanPid}","${cleanMobile}","${cleanEmail}","${cleanPosting}","${cleanDate}","${cleanAmount}","${cleanRemarks}"\n`;
+      summaryRows.forEach(s => {
+        const vals = ['', s.label, '', '', '', '', '', s.deposit === '' ? '' : s.deposit, s.final, ''];
+        csv += vals.map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',') + '\n';
       });
 
       const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -4558,12 +4708,26 @@
       showModal(`
         <div style="text-align: center; margin-bottom: 12px;">
           <div style="font-size: 2rem;">📥📊</div>
-          <h3 style="font-weight: 700; font-size: 1.05rem; color: var(--primary);">${state.lang === 'bn' ? 'রিপোর্ট ডাউনলোড ফরম্যাট নির্বাচন করুন' : 'Choose Report Download Format'}</h3>
-          <p style="font-size: 0.75rem; color: var(--text-muted);">${state.lang === 'bn' ? 'এক্সেল (.xls) অথবা CSV ফরম্যাটে রিপোর্ট ডাউনলোড করুন' : 'Download officers report as Excel (.xls) or CSV (.csv)'}</p>
+          <h3 style="font-weight: 700; font-size: 1.05rem; color: var(--primary);">
+            ${state.lang === 'bn' ? 'রিপোর্ট ডাউনলোড ফরম্যাট নির্বাচন করুন' : 'Choose Report Download Format'}
+          </h3>
+          <p style="font-size: 0.75rem; color: var(--text-muted);">
+            ${state.lang === 'bn' ? 'Excel, Word, PDF অথবা CSV ফরম্যাটে রিপোর্ট ডাউনলোড করুন' : 'Download officers report as Excel, Word, PDF, or CSV'}
+          </p>
         </div>
         <div style="display: flex; flex-direction: column; gap: 8px;">
-          <button type="button" class="btn btn-primary" onclick="closeModal(); downloadReportExcel();">📊 ${state.lang === 'bn' ? 'এক্সেল ফাইল ডাউনলোড (.xls)' : 'Download Excel File (.xls)'}</button>
-          <button type="button" class="btn btn-info" onclick="closeModal(); downloadReportCSV();">📄 ${state.lang === 'bn' ? 'CSV ফাইল ডাউনলোড (.csv)' : 'Download CSV File (.csv)'}</button>
+          <button type="button" class="btn btn-primary" onclick="closeModal(); downloadReportExcel();">
+            📊 ${state.lang === 'bn' ? 'এক্সেল ফাইল ডাউনলোড (.xls)' : 'Download Excel File (.xls)'}
+          </button>
+          <button type="button" class="btn btn-info" onclick="closeModal(); downloadReportWord();">
+            📝 ${state.lang === 'bn' ? 'ওয়ার্ড ফাইল ডাউনলোড (.doc)' : 'Download Word File (.doc)'}
+          </button>
+          <button type="button" class="btn btn-success" onclick="closeModal(); downloadReportPDF();">
+            📑 ${state.lang === 'bn' ? 'PDF ফাইল ডাউনলোড (.pdf)' : 'Download PDF File (.pdf)'}
+          </button>
+          <button type="button" class="btn btn-outline" onclick="closeModal(); downloadReportCSV();">
+            📄 ${state.lang === 'bn' ? 'CSV ফাইল ডাউনলোড (.csv)' : 'Download CSV File (.csv)'}
+          </button>
           <button type="button" class="btn btn-outline" onclick="closeModal()">${t('cancelBtn')}</button>
         </div>
       `);
