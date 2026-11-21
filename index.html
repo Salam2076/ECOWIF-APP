@@ -4,6 +4,15 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content">
   <title>ECOWIF - Election Commission Officers Welfare and Investment Fund</title>
+  <!-- PWA Manifest & Theme Settings for Full Install Support -->
+  <link rel="manifest" href="./manifest.json">
+  <meta name="theme-color" content="#064e3b">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="ECOWIF">
+  <link rel="apple-touch-icon" href="./icon-192.png">
+
   
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -4909,6 +4918,19 @@
     renderContent();
     syncWeeklyPendingDepositReminder({ allowInAppToast: true, deferMs: 1200 });
     initFirebase();
+
+    // PWA Service Worker Registration
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function() {
+        navigator.serviceWorker.register('./sw.js')
+          .then(function(registration) {
+            console.log('ECOWIF Service Worker registered successfully:', registration.scope);
+          })
+          .catch(function(error) {
+            console.warn('ECOWIF Service Worker registration failed:', error);
+          });
+      });
+    }
   </script>
 </body>
 </html>
