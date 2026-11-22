@@ -1462,7 +1462,7 @@
         enabled: false,
         updatedAt: ''
       },
-      adminPin: localStorage.getItem('ecowif_admin_pin') || '1234',
+      adminPin: localStorage.getItem('ecowif_admin_pin') || '10915010',
       isLiveSync: false,
       onlineMembers: {},
       lang: (localStorage.getItem('ecowif_lang') === 'bn') ? 'bn' : 'en'
@@ -2223,7 +2223,7 @@
         loginMembersNow: 'বর্তমানে লগইন সদস্য -',
         viewMembersBtn: '👥 সদস্য দেখুন',
         noticeTitle: 'দাপ্তরিক নোটিশ',
-        noticeSubtitle: 'ইকোয়িফ অ্যাডমিনের ঘোষণা',
+        noticeSubtitle: 'ইকোয়িফ ঘোষণা',
         editNoticeBtn: '✏️ নোটিশ সম্পাদনা',
         noticeBarModalTitle: 'ড্যাশবোর্ড নোটিশ বার',
         noticeBarModalDesc: 'সকল সদস্যের জন্য ড্যাশবোর্ডের শীর্ষ বারের নিচে স্ক্রলিং নোটিশ প্রচার করুন',
@@ -2556,7 +2556,7 @@
       if (!user) return false;
 
       if (user.role === 'admin') {
-        const currentAdminPin = String(state.adminPin || '1234').trim();
+        const currentAdminPin = String(state.adminPin || '10915010').trim();
         if (user.sessionPin !== undefined && String(user.sessionPin).trim() !== currentAdminPin) {
           state.currentUser = null;
           localStorage.setItem('ecowif_user', 'null');
